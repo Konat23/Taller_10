@@ -11,7 +11,7 @@ from matplotlib.animation import FuncAnimation
 # ---------------------------
 # Parámetros (como en el MATLAB)
 # ---------------------------
-Tout = 1000  # tiempo de propagación (iteraciones de tiempo)
+Tout = 400  # tiempo de propagación (iteraciones de tiempo)
 Nx = 200  # puntos en x
 Nz = 200  # puntos en z
 c = 1200.0  # velocidad de fondo (m/s)
@@ -44,7 +44,19 @@ jx = np.arange(Nx)
 Z, X = np.meshgrid(iz, jx, indexing="ij")  # Z.shape=(Nz,Nx)
 r2 = (dh * (Z + 1) - z0) ** 2 + (dh * (X + 1) - x0) ** 2
 # Notar: en MATLAB i comienza en 1, por eso sumo +1 al índice para reproducir exactamente la fórmula original
-P2 = np.sin(1.0 - alpha * r2) * np.exp(-alpha * r2)
+# P2 = np.sin(1.0 - alpha * r2) * np.exp(-alpha * r2)
+
+# Fuente ricker (temporal)
+fq = 20  # frecuencia central (Hz)
+t = np.arange(0, Tout * dt, dt)
+src = (1 - 2 * (np.pi * fq * (t - 1 / fq)) ** 2) * np.exp(
+    -((np.pi * fq * (t - 1 / fq)) ** 2)
+)
+# plot src para ver la forma del pulso
+plt.figure()
+plt.plot(t, src)
+plt.show()
+
 
 # Guardar frame 0
 video[0, :, :] = P2.astype(np.float32)
@@ -74,6 +86,8 @@ for t in range(1, Tout):
     P1[:, :] = P2
     P2[:, :] = P3
 
+    # Añadir fuente en cada iteración (en el centro)
+    P2[3, Nx // 2] += src[t]
     # Guardar frame t
     video[t, :, :] = P3.astype(np.float32)
 
@@ -81,9 +95,23 @@ for t in range(1, Tout):
     if (t % 100) == 0:
         print(f"Iteración {t}/{Tout}")
 
+# Visualizacion rebenada
+print(video.shape)
+z_r = 3
+shotgather = video[:, z_r, :]
+print(shotgather.shape)
+plt.figure()
+plt.imshow(shotgather, aspect="auto", cmap="seismic")
+plt.colorbar(label="Amplitude")
+plt.xlabel("Time step")
+plt.ylabel("Receiver position (m)")
+plt.title(f"Shot gather at surface (z={z_r})")
+plt.show()
+# exit()
 # ---------------------------
 # Visualización (animación)
 # ---------------------------
+
 fig, ax = plt.subplots(figsize=(6, 6))
 im = ax.imshow(video[0], origin="upper", aspect="auto")
 cb = fig.colorbar(im, ax=ax)
