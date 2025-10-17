@@ -7,6 +7,7 @@ Requiere: numpy, matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from utils import plot_traces
 
 # ---------------------------
 # Parámetros (como en el MATLAB)
@@ -107,6 +108,15 @@ plt.xlabel("Time step")
 plt.ylabel("Receiver position (m)")
 plt.title(f"Shot gather at surface (z={z_r})")
 plt.show()
+
+# Visualización de trazas usando la función plot_traces
+plot_traces(
+    video,
+    z_index=z_r,
+    x_label="Receiver Position (m)",
+    y_label="Time step",
+    title="Shot Gather Traces",
+)
 # exit()
 # ---------------------------
 # Visualización (animación)
