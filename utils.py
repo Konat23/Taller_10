@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.animation import FuncAnimation
 
 
 def plot_traces(
@@ -56,20 +57,20 @@ def plot_traces(
     if cube_3d2 is not None:
         Trazas_subset2 = get_traces(Rx_subset, Rz_subset, cube_3d2)
 
-    plt.figure(figsize=(5, 6))  # 🔄 Más alto que ancho
+    plt.figure(figsize=(5, 6))  # Más alto que ancho
 
-    tiempo = np.arange(Nt)  # 🔄 eje Y ahora será el tiempo
+    tiempo = np.arange(Nt)  # eje Y ahora será el tiempo
 
-    # 🔄 Plot para cube_3d (Referencia) con ejes transpuestos
+    # Plot para cube_3d (Referencia) con ejes transpuestos
     for i in range(Trazas_subset.shape[0]):
         offset = Rx_subset[i]
         scaled_trace = Trazas_subset[i] / np.max(np.abs(Trazas_subset[i])) * (Nx / 20)
         label = "Referencia" if i == 0 else ""
         plt.plot(
             offset + scaled_trace, tiempo, color="black", label=label
-        )  # 🔄 X=traza, Y=tiempo
+        )  # X=traza, Y=tiempo
 
-    # 🔄 Plot para cube_3d2 (DeepOnet) si existe
+    # Plot para cube_3d2 (DeepOnet) si existe
     if cube_3d2 is not None:
         for i in range(Trazas_subset2.shape[0]):
             offset = Rx_subset[i]
@@ -86,13 +87,50 @@ def plot_traces(
                 label=label,
             )
 
-    # 🔄 Ajustar etiquetas e invertir eje Y (tiempo hacia abajo)
-    plt.ylabel("Tiempo (s)")  # 🔄 eje Y ahora es tiempo
-    plt.xlabel("Receptores (posición x)")  # 🔄 eje X ahora es receptores
-    plt.gca().invert_yaxis()  # 🔄 Tiempo creciente hacia abajo, típico en sísmica
+    # Ajustar etiquetas e invertir eje Y (tiempo hacia abajo)
+    plt.ylabel("Tiempo (s)")  # eje Y ahora es tiempo
+    plt.xlabel("Receptores (posición x)")  # eje X ahora es receptores
+    plt.gca().invert_yaxis()  # Tiempo creciente hacia abajo, típico en sísmica
 
     plt.title(title if title else f"Trazas en z={z_index}")
     plt.legend(loc="upper right", fontsize="small")
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+    plt.show()
+
+
+def plot_source_wavelet(t, src):
+    plt.figure()
+    plt.plot(t, src)
+    plt.title("Source Wavelet")
+    plt.xlabel("Time")
+    plt.ylabel("Amplitude")
+    plt.show()
+
+
+def plot_shot_gather(video, z_r):
+    shotgather = video[:, z_r, :]
+    plt.figure()
+    plt.imshow(shotgather, aspect="auto", cmap="seismic")
+    plt.colorbar(label="Amplitude")
+    plt.xlabel("Time step")
+    plt.ylabel("Receiver position (m)")
+    plt.title(f"Shot gather at surface (z={z_r})")
+    plt.show()
+
+
+def animate_video(video, Tout):
+    fig, ax = plt.subplots(figsize=(6, 6))
+    im = ax.imshow(video[0], origin="upper", aspect="auto")
+    cb = fig.colorbar(im, ax=ax)
+    ax.set_xlabel("Distance (m)")
+    ax.set_ylabel("Depth (m)")
+    title = ax.set_title("Iteration 0")
+
+    def update(frame):
+        im.set_data(video[frame])
+        title.set_text(f"Iteration {frame}")
+        return im, title
+
+    ani = FuncAnimation(fig, update, frames=range(0, Tout, 1), interval=10, blit=False)
     plt.show()
