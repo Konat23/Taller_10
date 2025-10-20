@@ -120,8 +120,11 @@ def plot_shot_gather(video, z_r):
 
 
 def animate_video(video, Tout):
+    vmax = np.max(np.abs(video))
     fig, ax = plt.subplots(figsize=(6, 6))
-    im = ax.imshow(video[0], origin="upper", aspect="auto")
+    im = ax.imshow(
+        video[0], origin="upper", aspect="auto", cmap="seismic", vmin=-vmax, vmax=vmax
+    )
     cb = fig.colorbar(im, ax=ax)
     ax.set_xlabel("Distance (m)")
     ax.set_ylabel("Depth (m)")
