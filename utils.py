@@ -119,8 +119,9 @@ def plot_shot_gather(video, z_r):
     plt.show()
 
 
-def animate_video(video, Tout, n_save=None):
-    vmax = np.max(np.abs(video))
+def animate_video(video, Tout, n_save=None, vmax=None):
+    if vmax is None:
+        vmax = np.max(np.abs(video))
     fig, ax = plt.subplots(figsize=(6, 6))
     im = ax.imshow(
         video[0], origin="upper", aspect="auto", cmap="seismic", vmin=-vmax, vmax=vmax

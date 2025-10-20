@@ -21,7 +21,7 @@ Nx = 200
 Nz = 200
 c = 1200.0
 dh = 2.0
-dt = dh / (c * np.sqrt(2))
+dt = 0.0011789  # dh / (c * np.sqrt(2))
 G = c * dt / dh
 
 alpha = 0.15
@@ -87,8 +87,8 @@ z_r = 3
 #    y_label="Time step",
 #    title=f"Shot Gather Traces at z={z_r}",
 # )
-
-# animate_video(video, Tout, n_save=250)
-frame = 250
-title = f"Frecuencia = {fq} Hz, frame = {frame}"
-plot_frame(video, n_save=250, title=title, vmax=0.12)
+print(np.max(video))
+# animate_video(video, Tout, n_save=250, vmax=1.0)
+frame = 399
+title = f"Δt = {dt} Hz, frame = {frame}"
+plot_frame(video, n_save=frame, title=title, vmax=0.1)
