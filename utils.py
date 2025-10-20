@@ -119,7 +119,7 @@ def plot_shot_gather(video, z_r):
     plt.show()
 
 
-def animate_video(video, Tout):
+def animate_video(video, Tout, n_save=None):
     vmax = np.max(np.abs(video))
     fig, ax = plt.subplots(figsize=(6, 6))
     im = ax.imshow(
@@ -137,3 +137,33 @@ def animate_video(video, Tout):
 
     ani = FuncAnimation(fig, update, frames=range(0, Tout, 1), interval=10, blit=False)
     plt.show()
+
+
+def plot_frame(video, n_save=None, vmax=None, title=None):
+    T_out = video.shape[0]
+    if n_save is None:
+        n_save = T_out // 2  # Guardar el cuadro medio si no se especifica
+    if n_save < 0 or n_save >= T_out:
+        raise ValueError(f"n_save debe estar entre 0 y {T_out - 1}")
+
+    if vmax is None:
+        vmax = np.max(np.abs(video[n_save]))
+        print(f"vmax no proporcionado. Usando vmax calculado: {vmax}")
+
+    plt.imshow(
+        video[n_save],
+        origin="upper",
+        aspect="auto",
+        cmap="seismic",
+        vmin=-vmax,
+        vmax=vmax,
+    )
+    plt.colorbar(label="Amplitude")
+    plt.xlabel("Distance (m)")
+    plt.ylabel("Depth (m)")
+    plt.title(f"{title if title else f'Frame at iteration {n_save}'}")
+    plt.savefig(f"frame_{n_save}.png")
+    print(f"Frame {n_save} saved as 'frame_{n_save}.png'")
+
+
+plt.show()

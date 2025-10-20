@@ -11,6 +11,7 @@ from utils import (
     plot_source_wavelet,
     plot_shot_gather,
     animate_video,
+    plot_frame,
 )
 from numba import jit
 
@@ -38,7 +39,7 @@ src = (1 - 2 * (np.pi * fq * (t - 1 / fq)) ** 2) * np.exp(
     -((np.pi * fq * (t - 1 / fq)) ** 2)
 )
 
-plot_source_wavelet(t, src)
+# plot_source_wavelet(t, src)
 
 
 @jit(nopython=True)
@@ -77,14 +78,17 @@ def propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src):
 video = propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src)
 
 z_r = 3
-plot_shot_gather(video, z_r)
+# plot_shot_gather(video, z_r)
 
-plot_traces(
-    video,
-    z_index=z_r,
-    x_label="Receiver Position (m)",
-    y_label="Time step",
-    title=f"Shot Gather Traces at z={z_r}",
-)
+# plot_traces(
+#    video,
+#    z_index=z_r,
+#    x_label="Receiver Position (m)",
+#    y_label="Time step",
+#    title=f"Shot Gather Traces at z={z_r}",
+# )
 
-animate_video(video, Tout)
+# animate_video(video, Tout, n_save=250)
+frame = 250
+title = f"Frecuencia = {fq} Hz, frame = {frame}"
+plot_frame(video, n_save=250, title=title, vmax=0.12)
