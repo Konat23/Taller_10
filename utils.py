@@ -7,8 +7,8 @@ def plot_traces(
     cube_3d,
     cube_3d2=None,
     z_index=0,
-    x_label="x",
-    y_label="t",
+    x_label="Sensor Position (m)",
+    y_label="Tiempo (s)",
     title=None,
     cmap="seismic",
     center_colorbar=True,
@@ -52,6 +52,7 @@ def plot_traces(
             vmin, vmax = -abs_max, abs_max
 
     Rx_subset = np.linspace(borde, Nx - borde - 1, 10, dtype=int)
+    print(Rx_subset)
     Rz_subset = np.full(Rx_subset.shape[0], z_index)
     Trazas_subset = get_traces(Rx_subset, Rz_subset, cube_3d)
     if cube_3d2 is not None:
@@ -70,26 +71,9 @@ def plot_traces(
             offset + scaled_trace, tiempo, color="black", label=label
         )  # X=traza, Y=tiempo
 
-    # Plot para cube_3d2 (DeepOnet) si existe
-    if cube_3d2 is not None:
-        for i in range(Trazas_subset2.shape[0]):
-            offset = Rx_subset[i]
-            scaled_trace2 = (
-                Trazas_subset2[i] / np.max(np.abs(Trazas_subset2[i])) * (Nx / 20)
-            )
-            label = "DeepOnet" if i == 0 else ""
-            plt.plot(
-                offset + scaled_trace2,
-                tiempo,
-                linestyle="dashed",
-                color="red",
-                alpha=0.7,
-                label=label,
-            )
-
     # Ajustar etiquetas e invertir eje Y (tiempo hacia abajo)
-    plt.ylabel("Tiempo (s)")  # eje Y ahora es tiempo
-    plt.xlabel("Receptores (posición x)")  # eje X ahora es receptores
+    plt.ylabel(y_label)  # eje Y ahora es tiempo
+    plt.xlabel(x_label)  # eje X ahora es receptores
     plt.gca().invert_yaxis()  # Tiempo creciente hacia abajo, típico en sísmica
 
     plt.title(title if title else f"Trazas en z={z_index}")

@@ -21,7 +21,7 @@ Nx = 200
 Nz = 200
 c = 1200.0
 dh = 2.0
-dt = 0.0011789  # dh / (c * np.sqrt(2))
+dt = dh / (c * np.sqrt(2))
 G = c * dt / dh
 
 alpha = 0.15
@@ -80,13 +80,11 @@ video = propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src)
 z_r = 3
 # plot_shot_gather(video, z_r)
 
-# plot_traces(
-#    video,
-#    z_index=z_r,
-#    x_label="Receiver Position (m)",
-#    y_label="Time step",
-#    title=f"Shot Gather Traces at z={z_r}",
-# )
+plot_traces(
+    video,
+    z_index=z_r,
+    title=f"Shot Gather Traces at z={z_r}",
+)
 print(np.max(video))
 # animate_video(video, Tout, n_save=250, vmax=1.0)
 frame = 399
