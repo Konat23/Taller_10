@@ -14,6 +14,7 @@ from utils import (
     plot_frame,
 )
 from numba import jit
+from utils import timing
 
 # Parameters
 Tout = 400
@@ -22,6 +23,7 @@ Nz = 200
 c = 1200.0
 dh = 2.0
 dt = dh / (c * np.sqrt(2))
+print(f"dh: {dh}")
 G = c * dt / dh
 
 alpha = 0.15
@@ -42,6 +44,7 @@ src = (1 - 2 * (np.pi * fq * (t - 1 / fq)) ** 2) * np.exp(
 # plot_source_wavelet(t, src)
 
 
+@timing
 @jit(nopython=True)
 def propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src):
     P1 = np.zeros((Nz, Nx), dtype=np.float64)
@@ -75,6 +78,7 @@ def propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src):
     return video
 
 
+video = propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src)
 video = propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src)
 
 z_r = 3
