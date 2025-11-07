@@ -174,3 +174,132 @@ def timing(f):
 
     wrapper.elapsed_time = None  # Inicializa el atributo
     return wrapper
+
+
+from numba import jit
+
+
+@jit(nopython=True)
+def get_CPML(CPMLimit, R, Vcpml, Nx, Nz, dx, dz, dt, frec):
+    """
+    Implementación Python corregida - inicialización con ceros como en MATLAB
+    """
+    # CORREGIDO: Inicializar con CEROS como en MATLAB
+    a_x = np.zeros(Nx, dtype=np.float64)
+    a_x_half = np.zeros(Nx, dtype=np.float64)
+    b_x = np.zeros(Nx, dtype=np.float64)  # CEROS, no unos
+    b_x_half = np.zeros(Nx, dtype=np.float64)  # CEROS, no unos
+
+    a_z = np.zeros(Nz, dtype=np.float64)
+    a_z_half = np.zeros(Nz, dtype=np.float64)
+    b_z = np.zeros(Nz, dtype=np.float64)  # CEROS, no unos
+    b_z_half = np.zeros(Nz, dtype=np.float64)  # CEROS, no unos
+
+    # Parámetros PML
+    D_pml_x = CPMLimit * dx
+    D_pml_z = CPMLimit * dz
+    d0_x = -3.0 / (2.0 * D_pml_x) * np.log(R)
+    d0_z = -3.0 / (2.0 * D_pml_z) * np.log(R)
+
+    # Arrays temporales
+    x = np.zeros(CPMLimit + 1)
+    x_half = np.zeros(CPMLimit + 1)
+    alpha_x = np.zeros(CPMLimit + 1)
+    alpha_x_half = np.zeros(CPMLimit + 1)
+
+    z = np.zeros(CPMLimit + 1)
+    z_half = np.zeros(CPMLimit + 1)
+    alpha_z = np.zeros(CPMLimit + 1)
+    alpha_z_half = np.zeros(CPMLimit + 1)
+
+    # Inicializar perfiles PML (igual que antes)
+    for j in range(CPMLimit + 1):
+        x[j] = (CPMLimit - j) * dx
+        z[j] = (CPMLimit - j) * dz
+        alpha_x[j] = np.pi * frec * (D_pml_x - x[j]) / D_pml_x
+        alpha_z[j] = np.pi * frec * (D_pml_z - z[j]) / D_pml_z
+
+        x_half[j] = (CPMLimit - j) * dx - dx / 2.0
+        z_half[j] = (CPMLimit - j) * dz - dz / 2.0
+        alpha_x_half[j] = np.pi * frec * (D_pml_x - x_half[j]) / D_pml_x
+        alpha_z_half[j] = np.pi * frec * (D_pml_z - z_half[j]) / D_pml_z
+
+    # Bottom side (borde inferior)
+    for j in range(Nz - CPMLimit - 1, Nz):
+        idx = Nz - j - 1  # Índice para arrays PML
+        if idx < len(z):
+            d_z_val = d0_z * Vcpml * ((z[idx] / D_pml_z) ** 2)
+            b_z[j] = np.exp(-(d_z_val + alpha_z[idx]) * dt)
+            if np.abs(d_z_val + alpha_z[idx]) > 1e-20:
+                a_z[j] = d_z_val / (d_z_val + alpha_z[idx]) * (b_z[j] - 1.0)
+            else:
+                a_z[j] = 0.0
+
+            # Para arrays _half
+            if j == Nz - CPMLimit - 1:
+                b_z_half[j] = 0.0
+                a_z_half[j] = 0.0
+            else:
+                d_z_half_val = d0_z * Vcpml * ((z_half[idx] / D_pml_z) ** 2)
+                b_z_half[j] = np.exp(-(d_z_half_val + alpha_z_half[idx]) * dt)
+                if np.abs(d_z_half_val + alpha_z_half[idx]) > 1e-20:
+                    a_z_half[j] = (
+                        d_z_half_val
+                        / (d_z_half_val + alpha_z_half[idx])
+                        * (b_z_half[j] - 1.0)
+                    )
+                else:
+                    a_z_half[j] = 0.0
+
+    # Left side (borde izquierdo)
+    for i in range(CPMLimit + 1):
+        if i < len(x):
+            d_x_val = d0_x * Vcpml * ((x[i] / D_pml_x) ** 2)
+            b_x[i] = np.exp(-(d_x_val + alpha_x[i]) * dt)
+            if np.abs(d_x_val + alpha_x[i]) > 1e-20:
+                a_x[i] = d_x_val / (d_x_val + alpha_x[i]) * (b_x[i] - 1.0)
+            else:
+                a_x[i] = 0.0
+
+            if i == CPMLimit:
+                b_x_half[i] = 0.0
+                a_x_half[i] = 0.0
+            else:
+                d_x_half_val = d0_x * Vcpml * ((x_half[i] / D_pml_x) ** 2)
+                b_x_half[i] = np.exp(-(d_x_half_val + alpha_x_half[i]) * dt)
+                if np.abs(d_x_half_val + alpha_x_half[i]) > 1e-20:
+                    a_x_half[i] = (
+                        d_x_half_val
+                        / (d_x_half_val + alpha_x_half[i])
+                        * (b_x_half[i] - 1.0)
+                    )
+                else:
+                    a_x_half[i] = 0.0
+
+    # Right side (borde derecho)
+    for i in range(Nx - CPMLimit - 1, Nx):
+        idx = Nx - i - 1  # Índice para arrays PML
+        if idx < len(x):
+            d_x_val = d0_x * Vcpml * ((x[idx] / D_pml_x) ** 2)
+            b_x[i] = np.exp(-(d_x_val + alpha_x[idx]) * dt)
+            if np.abs(d_x_val + alpha_x[idx]) > 1e-20:
+                a_x[i] = d_x_val / (d_x_val + alpha_x[idx]) * (b_x[i] - 1.0)
+            else:
+                a_x[i] = 0.0
+
+            if i == Nx - CPMLimit - 1:
+                b_x_half[i] = 0.0
+                a_x_half[i] = 0.0
+            else:
+                d_x_half_val = d0_x * Vcpml * ((x_half[idx] / D_pml_x) ** 2)
+                b_x_half[i] = np.exp(-(d_x_half_val + alpha_x_half[idx]) * dt)
+                if np.abs(d_x_half_val + alpha_x_half[idx]) > 1e-20:
+                    a_x_half[i] = (
+                        d_x_half_val
+                        / (d_x_half_val + alpha_x_half[idx])
+                        * (b_x_half[i] - 1.0)
+                    )
+                else:
+                    a_x_half[i] = 0.0
+
+    return a_x, a_x_half, b_x, b_x_half, a_z, a_z_half, b_z, b_z_half

@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
 from utils import plot_frame, timing
+from utils import get_CPML
 
 # --- parámetros ---
 Tout = 1000
@@ -26,9 +27,9 @@ r2 = (dh * (Z + 1) - z0) ** 2 + (dh * (X + 1) - x0) ** 2
 
 fq = 20.0
 t = np.arange(0, Tout * dt, dt)
-src1d = (1 - 2 * (np.pi * fq * (t - 1.0 / fq)) ** 2) * np.exp(
-    -((np.pi * fq * (t - 1.0 / fq)) ** 2)
-)
+a = (np.pi * fq) ** 2
+t0 = 0.1
+src1d = -2 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)
 
 src = src1d.reshape(-1, 1)
 
@@ -37,141 +38,17 @@ for iz_idx in range(Nz):
     vp_ori[:, iz_idx] = c
 
 
-@jit(nopython=True)
-def get_CPML(CPMLimit, R, Vcpml, Nx, Nz, dx, dz, dt, frec):
-    """
-    Calcula coeficientes para CPML coherente con implementación MATLAB
-    (idéntico a tu función original)
-    """
-    a_x = np.zeros(Nx, dtype=np.float64)
-    a_x_half = np.zeros(Nx, dtype=np.float64)
-    b_x = np.ones(Nx, dtype=np.float64)
-    b_x_half = np.ones(Nx, dtype=np.float64)
-
-    a_z = np.zeros(Nz, dtype=np.float64)
-    a_z_half = np.zeros(Nz, dtype=np.float64)
-    b_z = np.ones(Nz, dtype=np.float64)
-    b_z_half = np.ones(Nz, dtype=np.float64)
-
-    D_pml_x = CPMLimit * dx
-    D_pml_z = CPMLimit * dz
-    d0_x = -3.0 / (2.0 * D_pml_x) * np.log(R)
-    d0_z = -3.0 / (2.0 * D_pml_z) * np.log(R)
-
-    x = np.zeros(CPMLimit + 1)
-    x_half = np.zeros(CPMLimit + 1)
-    alpha_x = np.zeros(CPMLimit + 1)
-    alpha_x_half = np.zeros(CPMLimit + 1)
-
-    z = np.zeros(CPMLimit + 1)
-    z_half = np.zeros(CPMLimit + 1)
-    alpha_z = np.zeros(CPMLimit + 1)
-    alpha_z_half = np.zeros(CPMLimit + 1)
-
-    for j in range(CPMLimit + 1):
-        x[j] = (CPMLimit - j) * dx
-        z[j] = (CPMLimit - j) * dz
-        alpha_x[j] = np.pi * frec * (D_pml_x - x[j]) / D_pml_x
-        alpha_z[j] = np.pi * frec * (D_pml_z - z[j]) / D_pml_z
-
-        x_half[j] = (CPMLimit - j) * dx - dx / 2.0
-        z_half[j] = (CPMLimit - j) * dz - dz / 2.0
-        alpha_x_half[j] = np.pi * frec * (D_pml_x - x_half[j]) / D_pml_x
-        alpha_z_half[j] = np.pi * frec * (D_pml_z - z_half[j]) / D_pml_z
-
-    # Bottom (bordes en z)
-    for j in range(Nz - CPMLimit - 1, Nz):
-        idx = Nz - j - 1
-        if idx < len(z):
-            d_z_val = d0_z * Vcpml * ((z[idx] / D_pml_z) ** 2)
-            b_z[j] = np.exp(-(d_z_val + alpha_z[idx]) * dt)
-            if np.abs(d_z_val + alpha_z[idx]) > 1e-20:
-                a_z[j] = d_z_val / (d_z_val + alpha_z[idx]) * (b_z[j] - 1.0)
-            else:
-                a_z[j] = 0.0
-
-            if j == Nz - CPMLimit - 1:
-                b_z_half[j] = 0.0
-                a_z_half[j] = 0.0
-            else:
-                d_z_half_val = d0_z * Vcpml * ((z_half[idx] / D_pml_z) ** 2)
-                b_z_half[j] = np.exp(-(d_z_half_val + alpha_z_half[idx]) * dt)
-                if np.abs(d_z_half_val + alpha_z_half[idx]) > 1e-20:
-                    a_z_half[j] = (
-                        d_z_half_val
-                        / (d_z_half_val + alpha_z_half[idx])
-                        * (b_z_half[j] - 1.0)
-                    )
-                else:
-                    a_z_half[j] = 0.0
-
-    # Left
-    for i in range(CPMLimit + 1):
-        if i < len(x):
-            d_x_val = d0_x * Vcpml * ((x[i] / D_pml_x) ** 2)
-            b_x[i] = np.exp(-(d_x_val + alpha_x[i]) * dt)
-            if np.abs(d_x_val + alpha_x[i]) > 1e-20:
-                a_x[i] = d_x_val / (d_x_val + alpha_x[i]) * (b_x[i] - 1.0)
-            else:
-                a_x[i] = 0.0
-
-            if i == CPMLimit:
-                b_x_half[i] = 0.0
-                a_x_half[i] = 0.0
-            else:
-                d_x_half_val = d0_x * Vcpml * ((x_half[i] / D_pml_x) ** 2)
-                b_x_half[i] = np.exp(-(d_x_half_val + alpha_x_half[i]) * dt)
-                if np.abs(d_x_half_val + alpha_x_half[i]) > 1e-20:
-                    a_x_half[i] = (
-                        d_x_half_val
-                        / (d_x_half_val + alpha_x_half[i])
-                        * (b_x_half[i] - 1.0)
-                    )
-                else:
-                    a_x_half[i] = 0.0
-
-    # Right
-    for i in range(Nx - CPMLimit - 1, Nx):
-        idx = Nx - i - 1
-        if idx < len(x):
-            d_x_val = d0_x * Vcpml * ((x[idx] / D_pml_x) ** 2)
-            b_x[i] = np.exp(-(d_x_val + alpha_x[idx]) * dt)
-            if np.abs(d_x_val + alpha_x[idx]) > 1e-20:
-                a_x[i] = d_x_val / (d_x_val + alpha_x[idx]) * (b_x[i] - 1.0)
-            else:
-                a_x[i] = 0.0
-
-            if i == Nx - CPMLimit - 1:
-                b_x_half[i] = 0.0
-                a_x_half[i] = 0.0
-            else:
-                d_x_half_val = d0_x * Vcpml * ((x_half[idx] / D_pml_x) ** 2)
-                b_x_half[i] = np.exp(-(d_x_half_val + alpha_x_half[idx]) * dt)
-                if np.abs(d_x_half_val + alpha_x_half[idx]) > 1e-20:
-                    a_x_half[i] = (
-                        d_x_half_val
-                        / (d_x_half_val + alpha_x_half[idx])
-                        * (b_x_half[i] - 1.0)
-                    )
-                else:
-                    a_x_half[i] = 0.0
-
-    return a_x, a_x_half, b_x, b_x_half, a_z, a_z_half, b_z, b_z_half
-
-
-@timing
-@jit(nopython=True)
+# @timing
+# @jit(nopython=True)
 def propagate_wave_cpml(Tout, Nx, Nz, c, dh, dt, G, src):
     """
     Versión corregida: usa convención (ix, iz) -> arrays shape (Nx, Nz)
     para mantener coherencia con get_CPML y con la implementación de CPML.
     """
-    # NOTE: cambio principal aquí: P arrays con forma (Nx, Nz)
     P1 = np.zeros((Nx, Nz), dtype=np.float64)
     P2 = np.zeros((Nx, Nz), dtype=np.float64)
     P3 = np.zeros((Nx, Nz), dtype=np.float64)
 
-    # video lo guardamos al final con shape (Tout, Nz, Nx) para compatibilidad con plot_frame
     video = np.zeros((Tout, Nz, Nx), dtype=np.float32)
     video[0, :, :] = P2.T.astype(np.float32)
 
@@ -182,7 +59,6 @@ def propagate_wave_cpml(Tout, Nx, Nz, c, dh, dt, G, src):
     Vmax = c
     R = 1e-3
     fq = 25.0
-    # Fuente en el centro (coordenadas en términos de indices ix, iz)
     Ix0 = Nx // 2
     Iz0 = Nz // 2
 
@@ -190,7 +66,6 @@ def propagate_wave_cpml(Tout, Nx, Nz, c, dh, dt, G, src):
         CPMLimit, R, Vmax, Nx, Nz, dh, dh, dt, fq
     )
 
-    # campos auxiliares para CPML (coherentes con (Nx, Nz))
     F_dPdx = np.zeros((Nx, Nz), dtype=np.float64)
     F_dPdz = np.zeros((Nx, Nz), dtype=np.float64)
     F_d2Pdx2 = np.zeros((Nx, Nz), dtype=np.float64)
@@ -198,13 +73,7 @@ def propagate_wave_cpml(Tout, Nx, Nz, c, dh, dt, G, src):
 
     one_over_dh = 1.0 / dh
 
-    # bucle temporal
     for t_idx in range(1, Tout):
-        # primera aproximación interior (esquinas excluidas)
-        # usamos notación P2[ix, iz]
-        # interior regular (no-PML): índices ix=1..Nx-2, iz=1..Nz-2
-        # computo central para la región interior (vectorizado en bloques)
-        # Nota: aquí mantener el esquema original simple
         for ix in range(1, Nx - 1):
             for iz in range(1, Nz - 1):
                 P3[ix, iz] = (
@@ -250,7 +119,6 @@ def propagate_wave_cpml(Tout, Nx, Nz, c, dh, dt, G, src):
                 )
 
         # --- CPML en el lado derecho ---
-        # iteramos desde la derecha hacia la izquierda (coincide con Código B)
         for ix in range(Nx - 2, Nx - CPMLimit - 2, -1):
             for iz in range(1, Nz - 1):
                 dP_dx = (P2[ix, iz] - P2[ix - 1, iz]) * one_over_dh
