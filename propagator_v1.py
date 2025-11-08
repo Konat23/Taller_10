@@ -1,210 +1,202 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from numba import jit
-from utils import plot_frame, timing
 from utils import get_CPML
-
-# --- parámetros ---
-Tout = 1000
-Nx = 200
-Nz = 200
-c = 1200.0
-dh = 2.0
-dt = dh / (c * np.sqrt(2))
-alpha = 0.15
-G = c * dt / dh
-
-Ix0 = np.array([Nx // 2], dtype=np.int64)
-Iz0 = Nz // 3
-
-x0 = dh * (Ix0[0] + 1)
-z0 = dh * (Iz0 + 1)
-
-iz = np.arange(Nz)
-jx = np.arange(Nx)
-Z, X = np.meshgrid(iz, jx, indexing="ij")
-r2 = (dh * (Z + 1) - z0) ** 2 + (dh * (X + 1) - x0) ** 2
-
-fq = 20.0
-t = np.arange(0, Tout * dt, dt)
-a = (np.pi * fq) ** 2
-t0 = 0.1
-src1d = -2 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)
-
-src = src1d.reshape(-1, 1)
-
-vp_ori = np.zeros((Nx, Nz), dtype=np.float64)
-for iz_idx in range(Nz):
-    vp_ori[:, iz_idx] = c
+from utils import plot_frame, timing
 
 
-# @timing
-# @jit(nopython=True)
-def propagate_wave_cpml(Tout, Nx, Nz, c, dh, dt, G, src):
-    """
-    Versión corregida: usa convención (ix, iz) -> arrays shape (Nx, Nz)
-    para mantener coherencia con get_CPML y con la implementación de CPML.
-    """
-    P1 = np.zeros((Nx, Nz), dtype=np.float64)
-    P2 = np.zeros((Nx, Nz), dtype=np.float64)
-    P3 = np.zeros((Nx, Nz), dtype=np.float64)
+@jit(nopython=True)
+def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec):
+    max_ix = int(max_offset / dx)
+    Nx, Nz = m.shape
+    Nt = len(src)
 
-    video = np.zeros((Tout, Nz, Nx), dtype=np.float32)
-    video[0, :, :] = P2.T.astype(np.float32)
+    # Initialize arrays
+    P = np.zeros((Nx, Nz, Nt))
+    P_Iz0 = np.zeros((Nt, Nx))
+    d2P_dt2 = np.zeros((Nx, Nz, Nt))
 
-    coeff_center = 2.0 - 4.0 * G * G
-    coeff_neigh = G * G
+    # Temporary arrays for CPML
+    dP_dx = np.zeros((Nx, Nz))
+    dP_dz = np.zeros((Nx, Nz))
+    F_dPdx = np.zeros((Nx, Nz))
+    F_dPdz = np.zeros((Nx, Nz))
+    F_d2Pdx2 = np.zeros((Nx, Nz))
+    F_d2Pdz2 = np.zeros((Nx, Nz))
 
-    CPMLimit = 20
-    Vmax = c
+    v2 = m**2
+
+    l_att = 20
+    CPMLimit = l_att
+    one_over_dx2 = 1.0 / dx**2
+    one_over_dz2 = 1.0 / dz**2
+    one_over_dx = 1.0 / dx
+    one_over_dz = 1.0 / dz
+
+    Vmax = np.max(m)
+    Vmin = np.min(m)
+    w_l_ = Vmin / frec
+    Points_per_wavelength = w_l_ / dx
+    Courant_number = Vmax * dt / dx * np.sqrt(2.0)
+
+    # Get CPML coefficients
     R = 1e-3
-    fq = 25.0
-    Ix0 = Nx // 2
-    Iz0 = Nz // 2
-
+    Vcpml = Vmax
     a_x, a_x_half, b_x, b_x_half, a_z, a_z_half, b_z, b_z_half = get_CPML(
-        CPMLimit, R, Vmax, Nx, Nz, dh, dh, dt, fq
+        CPMLimit, R, Vcpml, Nx, Nz, dx, dz, dt, frec
     )
 
-    F_dPdx = np.zeros((Nx, Nz), dtype=np.float64)
-    F_dPdz = np.zeros((Nx, Nz), dtype=np.float64)
-    F_d2Pdx2 = np.zeros((Nx, Nz), dtype=np.float64)
-    F_d2Pdz2 = np.zeros((Nx, Nz), dtype=np.float64)
+    for it in range(1, Nt - 1):
+        # Snapshot
+        P_tmp = P[:, :, it].copy()
 
-    one_over_dh = 1.0 / dh
+        # Free-surface conditions
+        d2P_dt2[:, 1, it] = 0  # Note: Python uses 0-based indexing, so iz=2 becomes 1
 
-    for t_idx in range(1, Tout):
-        for ix in range(1, Nx - 1):
-            for iz in range(1, Nz - 1):
-                P3[ix, iz] = (
-                    coeff_center * P2[ix, iz]
-                    + coeff_neigh
-                    * (
-                        P2[ix + 1, iz]
-                        + P2[ix - 1, iz]
-                        + P2[ix, iz + 1]
-                        + P2[ix, iz - 1]
-                    )
-                    - P1[ix, iz]
-                )
-
-        # --- CPML en el lado izquierdo (small ix) ---
-        for ix in range(1, CPMLimit + 1):
-            for iz in range(1, Nz - 1):
-                dP_dx = (P2[ix + 1, iz] - P2[ix, iz]) * one_over_dh
-                dP_dz = (P2[ix, iz + 1] - P2[ix, iz]) * one_over_dh
-
-                F_dPdx[ix, iz] = F_dPdx[ix, iz] * b_x_half[ix] + a_x_half[ix] * dP_dx
-                dP_dx_mod = dP_dx + F_dPdx[ix, iz]
-
-                F_dPdz[ix, iz] = F_dPdz[ix, iz] * b_z[iz] + a_z[iz] * dP_dz
-                dP_dz_mod = dP_dz + F_dPdz[ix, iz]
-
+        # Spatial finite differences - main domain
+        for ix in range(
+            CPMLimit + 1, Nx - CPMLimit - 1
+        ):  # +1 because Python is 0-based
+            for iz in range(2, Nz - CPMLimit - 1):  # iz=3 becomes 2
                 d2P_dx2 = (
-                    dP_dx_mod - (P2[ix, iz] - P2[ix - 1, iz]) * one_over_dh
-                ) * one_over_dh
+                    P_tmp[ix + 1, iz] + P_tmp[ix - 1, iz] - 2 * P_tmp[ix, iz]
+                ) * one_over_dx2
                 d2P_dz2 = (
-                    dP_dz_mod - (P2[ix, iz] - P2[ix, iz - 1]) * one_over_dh
-                ) * one_over_dh
+                    P_tmp[ix, iz + 1] + P_tmp[ix, iz - 1] - 2 * P_tmp[ix, iz]
+                ) * one_over_dz2
+                d2P_dt2[ix, iz, it] = d2P_dx2 + d2P_dz2
 
-                F_d2Pdx2[ix, iz] = F_d2Pdx2[ix, iz] * b_x[ix] + a_x[ix] * d2P_dx2
-                d2P_dx2_mod = d2P_dx2 + F_d2Pdx2[ix, iz]
+        # Boundary conditions
+        P_tmp[Nx - 2, :] = 0  # Nx-1 becomes Nx-2
+        P_tmp[1, :] = 0  # 2 becomes 1
+        P_tmp[:, Nz - 2] = 0  # Nz-1 becomes Nz-2
 
-                F_d2Pdz2[ix, iz] = F_d2Pdz2[ix, iz] * b_z[iz] + a_z[iz] * d2P_dz2
-                d2P_dz2_mod = d2P_dz2 + F_d2Pdz2[ix, iz]
-
-                laplacian_mod = d2P_dx2_mod + d2P_dz2_mod
-                P3[ix, iz] = (
-                    c * c * laplacian_mod * dt * dt + 2 * P2[ix, iz] - P1[ix, iz]
-                )
-
-        # --- CPML en el lado derecho ---
-        for ix in range(Nx - 2, Nx - CPMLimit - 2, -1):
-            for iz in range(1, Nz - 1):
-                dP_dx = (P2[ix, iz] - P2[ix - 1, iz]) * one_over_dh
-                dP_dz = (P2[ix, iz + 1] - P2[ix, iz]) * one_over_dh
+        # C-PML conditions - Left boundary
+        for ix in range(1, CPMLimit + 1):  # 2 becomes 1
+            for iz in range(1, Nz - 1):  # 2 becomes 1
+                dP_dx[ix, iz] = (P_tmp[ix + 1, iz] - P_tmp[ix, iz]) * one_over_dx
+                dP_dz[ix, iz] = (P_tmp[ix, iz + 1] - P_tmp[ix, iz]) * one_over_dz
 
                 F_dPdx[ix, iz] = (
-                    F_dPdx[ix, iz] * b_x_half[ix - 1] + a_x_half[ix - 1] * dP_dx
+                    F_dPdx[ix, iz] * b_x_half[ix] + a_x_half[ix] * dP_dx[ix, iz]
                 )
-                dP_dx_mod = dP_dx + F_dPdx[ix, iz]
+                dP_dx[ix, iz] = dP_dx[ix, iz] + F_dPdx[ix, iz]
 
-                F_dPdz[ix, iz] = F_dPdz[ix, iz] * b_z[iz] + a_z[iz] * dP_dz
-                dP_dz_mod = dP_dz + F_dPdz[ix, iz]
+                F_dPdz[ix, iz] = F_dPdz[ix, iz] * b_z[iz] + a_z[iz] * dP_dz[ix, iz]
+                dP_dz[ix, iz] = dP_dz[ix, iz] + F_dPdz[ix, iz]
 
-                d2P_dx2 = (
-                    (P2[ix + 1, iz] - P2[ix, iz]) * one_over_dh - dP_dx_mod
-                ) * one_over_dh
-                d2P_dz2 = (
-                    dP_dz_mod - (P2[ix, iz] - P2[ix, iz - 1]) * one_over_dh
-                ) * one_over_dh
+                d2P_dx2 = one_over_dx * (dP_dx[ix, iz] - dP_dx[ix - 1, iz])
+                d2P_dz2 = one_over_dz * (dP_dz[ix, iz] - dP_dz[ix, iz - 1])
 
                 F_d2Pdx2[ix, iz] = F_d2Pdx2[ix, iz] * b_x[ix] + a_x[ix] * d2P_dx2
-                d2P_dx2_mod = d2P_dx2 + F_d2Pdx2[ix, iz]
+                d2P_dx2 = d2P_dx2 + F_d2Pdx2[ix, iz]
 
                 F_d2Pdz2[ix, iz] = F_d2Pdz2[ix, iz] * b_z[iz] + a_z[iz] * d2P_dz2
-                d2P_dz2_mod = d2P_dz2 + F_d2Pdz2[ix, iz]
+                d2P_dz2 = d2P_dz2 + F_d2Pdz2[ix, iz]
 
-                laplacian_mod = d2P_dx2_mod + d2P_dz2_mod
-                P3[ix, iz] = (
-                    c * c * laplacian_mod * dt * dt + 2 * P2[ix, iz] - P1[ix, iz]
+                d2P_dt2[ix, iz, it] = d2P_dx2 + d2P_dz2
+
+        # C-PML conditions - Right boundary
+        for ix in range(Nx - 2, Nx - CPMLimit - 2, -1):  # Nx-1 becomes Nx-2
+            for iz in range(1, Nz - 1):
+                dP_dx[ix, iz] = (P_tmp[ix, iz] - P_tmp[ix - 1, iz]) * one_over_dx
+                dP_dz[ix, iz] = (P_tmp[ix, iz + 1] - P_tmp[ix, iz]) * one_over_dz
+
+                F_dPdx[ix, iz] = (
+                    F_dPdx[ix, iz] * b_x_half[ix - 1] + a_x_half[ix - 1] * dP_dx[ix, iz]
                 )
+                dP_dx[ix, iz] = dP_dx[ix, iz] + F_dPdx[ix, iz]
 
-        # --- CPML en la parte inferior (bordes z grandes) ---
+                F_dPdz[ix, iz] = F_dPdz[ix, iz] * b_z[iz] + a_z[iz] * dP_dz[ix, iz]
+                dP_dz[ix, iz] = dP_dz[ix, iz] + F_dPdz[ix, iz]
+
+                d2P_dx2 = one_over_dx * (dP_dx[ix + 1, iz] - dP_dx[ix, iz])
+                d2P_dz2 = one_over_dz * (dP_dz[ix, iz] - dP_dz[ix, iz - 1])
+
+                F_d2Pdx2[ix, iz] = F_d2Pdx2[ix, iz] * b_x[ix] + a_x[ix] * d2P_dx2
+                d2P_dx2 = d2P_dx2 + F_d2Pdx2[ix, iz]
+
+                F_d2Pdz2[ix, iz] = F_d2Pdz2[ix, iz] * b_z[iz] + a_z[iz] * d2P_dz2
+                d2P_dz2 = d2P_dz2 + F_d2Pdz2[ix, iz]
+
+                d2P_dt2[ix, iz, it] = d2P_dx2 + d2P_dz2
+
+        # C-PML conditions - Bottom boundary
         for ix in range(CPMLimit + 1, Nx - CPMLimit - 1):
-            for iz in range(Nz - CPMLimit - 1, Nz - 1):
-                dP_dx = (P2[ix + 1, iz] - P2[ix, iz]) * one_over_dh
-                dP_dz = (P2[ix, iz] - P2[ix, iz - 1]) * one_over_dh
+            for iz in range(Nz - 2, Nz - CPMLimit - 2, -1):  # Nz-1 becomes Nz-2
+                dP_dx[ix, iz] = (P_tmp[ix + 1, iz] - P_tmp[ix, iz]) * one_over_dx
+                dP_dz[ix, iz] = (P_tmp[ix, iz] - P_tmp[ix, iz - 1]) * one_over_dz
 
-                F_dPdx[ix, iz] = F_dPdx[ix, iz] * b_x[ix] + a_x[ix] * dP_dx
-                dP_dx_mod = dP_dx + F_dPdx[ix, iz]
+                F_dPdx[ix, iz] = F_dPdx[ix, iz] * b_x[ix] + a_x[ix] * dP_dx[ix, iz]
+                dP_dx[ix, iz] = dP_dx[ix, iz] + F_dPdx[ix, iz]
 
                 F_dPdz[ix, iz] = (
-                    F_dPdz[ix, iz] * b_z_half[iz - 1] + a_z_half[iz - 1] * dP_dz
+                    F_dPdz[ix, iz] * b_z_half[iz - 1] + a_z_half[iz - 1] * dP_dz[ix, iz]
                 )
-                dP_dz_mod = dP_dz + F_dPdz[ix, iz]
+                dP_dz[ix, iz] = dP_dz[ix, iz] + F_dPdz[ix, iz]
 
-                d2P_dx2 = (
-                    dP_dx_mod - (P2[ix, iz] - P2[ix - 1, iz]) * one_over_dh
-                ) * one_over_dh
-                d2P_dz2 = (
-                    (P2[ix, iz + 1] - P2[ix, iz]) * one_over_dh - dP_dz_mod
-                ) * one_over_dh
+                d2P_dx2 = one_over_dx * (dP_dx[ix, iz] - dP_dx[ix - 1, iz])
+                d2P_dz2 = one_over_dz * (dP_dz[ix, iz + 1] - dP_dz[ix, iz])
 
                 F_d2Pdx2[ix, iz] = F_d2Pdx2[ix, iz] * b_x[ix] + a_x[ix] * d2P_dx2
-                d2P_dx2_mod = d2P_dx2 + F_d2Pdx2[ix, iz]
+                d2P_dx2 = d2P_dx2 + F_d2Pdx2[ix, iz]
 
                 F_d2Pdz2[ix, iz] = F_d2Pdz2[ix, iz] * b_z[iz] + a_z[iz] * d2P_dz2
-                d2P_dz2_mod = d2P_dz2 + F_d2Pdz2[ix, iz]
+                d2P_dz2 = d2P_dz2 + F_d2Pdz2[ix, iz]
 
-                laplacian_mod = d2P_dx2_mod + d2P_dz2_mod
-                P3[ix, iz] = (
-                    c * c * laplacian_mod * dt * dt + 2 * P2[ix, iz] - P1[ix, iz]
-                )
+                d2P_dt2[ix, iz, it] = d2P_dx2 + d2P_dz2
 
-        # avanzar en el tiempo
-        P1[:, :] = P2
-        P2[:, :] = P3
+        # Time integration
+        P[:, :, it + 1] = (
+            dt**2 * v2 * d2P_dt2[:, :, it] + 2 * P[:, :, it] - P[:, :, it - 1]
+        )
 
-        # inyectar fuente (ojo: ahora P2[ix, iz] convención)
-        P2[Ix0, Iz0] += src[t_idx, 0]
+        # Source injection
+        P[Ix0, Iz0, it + 1] = P[Ix0, Iz0, it + 1] + src[it + 1]
 
-        # guardar frame transpuesto para mantener (Nz, Nx) en video
-        video[t_idx, :, :] = P3.T.astype(np.float32)
+        # Surface component selection
+        P_Iz0[it, :] = P[:, Iz0, it]
 
-        if (t_idx % 100) == 0:
-            print(f"Iteration {t_idx}/{Tout}")
+        if (it % 100) == 0:
+            print(f"Iteration {it}/{Tout}")
 
-    return video
+    # Extract result
+    start_ix = max(20, Ix0 - max_ix)  # 21 becomes 20 (0-based)
+    end_ix = min(Nx - 21, Ix0 + max_ix)  # Nx-20 becomes Nx-21
+
+    Pt = P[start_ix : end_ix + 1, Iz0, :].T
+
+    return Pt, P, d2P_dt2
 
 
-# ejecutar
-video = propagate_wave_cpml(Tout, Nx, Nz, c, dh, dt, G, src)
+if __name__ == "__main__":
+    # Example usage
+    Tout = 1000
+    c = 1200.0
+    Nx, Nz = 200, 200
+    dh = 2.0
+    dx, dz = dh, dh
+    dt = dh / (c * np.sqrt(2))
+    max_offset = 500.0
+    frec = 25.0
 
-# graficar algunos frames (mantengo tu plot_frame)
-frames = [100, 150, 200, 250, 300]
-vmax = 1
-for frame in frames:
-    plot_frame(
-        video, n_save=frame, title=f"Δt = {dt:.6e} s, frame = {frame}", vmax=vmax
-    )
+    m = np.ones((Nx, Nz)) * c  # Homogeneous medium
+
+    t = np.arange(0, Tout * dt, dt)
+    a = (np.pi * frec) ** 2
+    t0 = 0.1
+    src = -2 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)
+
+    Ix0, Iz0 = Nx // 2, Nz // 2  # Source location
+
+    Pt, P, d2P_dt2 = propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec)
+    print(P.shape)
+    print("Propagation complete.")
+    # graficar algunos frames (mantengo tu plot_frame)
+    frames = [100, 200, 250, 300, 400, 500, 600]
+    vmax = 1
+    for frame in frames:
+        plot_frame(
+            P,
+            n_save=frame,
+            title=f"frame = {frame}",  # vmax=vmax
+        )

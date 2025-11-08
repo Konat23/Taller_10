@@ -33,8 +33,7 @@ z0 = dh * Nz / 3
 iz = np.arange(Nz)
 jx = np.arange(Nx)
 Z, X = np.meshgrid(iz, jx, indexing="ij")
-r2 = (dh * (Z + 1) - z0) ** 2 + (dh * (X + 1) - x0) ** 2
-
+Ix0, Iz0 = 3, Nz // 2  # Source location
 fq = 20
 t = np.arange(0, Tout * dt, dt)
 src = (1 - 2 * (np.pi * fq * (t - 1 / fq)) ** 2) * np.exp(
@@ -69,7 +68,7 @@ def propagate_wave(Tout, Nx, Nz, c, dh, dt, G, src):
         P1[:, :] = P2
         P2[:, :] = P3
 
-        P2[3, Nx // 2] += src[t]
+        P2[Iz0, Ix0] += src[t]
         video[t, :, :] = P3.astype(np.float32)
 
         if (t % 100) == 0:
@@ -91,6 +90,7 @@ plot_traces(
 )
 print(np.max(video))
 # animate_video(video, Tout, n_save=250, vmax=1.0)
-frame = 399
-title = f"Δt = {dt} Hz, frame = {frame}"
+frame = 100
+title = f"frame = {frame}"
+video = video.transpose(2, 1, 0)
 plot_frame(video, n_save=frame, title=title, vmax=0.1)

@@ -125,18 +125,18 @@ def animate_video(video, Tout, n_save=None, vmax=None):
 
 
 def plot_frame(video, n_save=None, vmax=None, title=None):
-    T_out = video.shape[0]
+    T_out = video.shape[2]
     if n_save is None:
         n_save = T_out // 2  # Guardar el cuadro medio si no se especifica
     if n_save < 0 or n_save >= T_out:
         raise ValueError(f"n_save debe estar entre 0 y {T_out - 1}")
 
     if vmax is None:
-        vmax = np.max(np.abs(video[n_save]))
+        vmax = np.max(np.abs(video[:, :, n_save]))
         print(f"vmax no proporcionado. Usando vmax calculado: {vmax}")
 
     plt.imshow(
-        video[n_save],
+        video[:, :, n_save],
         origin="upper",
         aspect="auto",
         cmap="seismic",
