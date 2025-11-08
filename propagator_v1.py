@@ -184,19 +184,19 @@ if __name__ == "__main__":
     t = np.arange(0, Tout * dt, dt)
     a = (np.pi * frec) ** 2
     t0 = 0.1
-    src = -2 * a * (t - t0) * np.exp(-a * (t - t0) ** 2)
+    src = (1 - 2 * (np.pi * frec * (t - 1 / frec)) ** 2) * np.exp(
+        -((np.pi * frec * (t - 1 / frec)) ** 2)
+    )
 
-    Ix0, Iz0 = Nx // 2, Nz // 2  # Source location
+    Ix0, Iz0 = Nx // 2, 3  # Source location
 
     Pt, P, d2P_dt2 = propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec)
     print(P.shape)
     print("Propagation complete.")
     # graficar algunos frames (mantengo tu plot_frame)
-    frames = [100, 200, 250, 300, 400, 500, 600]
+    frames = [250]  # [100, 200, 250, 300, 400, 500, 600]
     vmax = 1
     for frame in frames:
         plot_frame(
-            P,
-            n_save=frame,
-            title=f"frame = {frame}",  # vmax=vmax
+            P.transpose(1, 0, 2), n_save=frame, title=f"frame = {frame}", vmax=0.1
         )
