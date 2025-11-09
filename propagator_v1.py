@@ -157,7 +157,7 @@ def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec):
         P_Iz0[it, :] = P[:, Iz0, it]
 
         if (it % 100) == 0:
-            print(f"Iteration {it}/{Tout}")
+            print(f"Iteration {it}/{Nt - 1}")
 
     # Extract result
     start_ix = max(20, Ix0 - max_ix)  # 21 becomes 20 (0-based)
@@ -191,10 +191,11 @@ if __name__ == "__main__":
     Ix0, Iz0 = Nx // 2, 3  # Source location
 
     Pt, P, d2P_dt2 = propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec)
-    print(P.shape)
+    print(f"Pt Shape: {Pt.shape}")
+    print(f"P Shape: {P.shape}")
     print("Propagation complete.")
     # graficar algunos frames (mantengo tu plot_frame)
-    frames = [250]  # [100, 200, 250, 300, 400, 500, 600]
+    frames = [450]  # [100, 200, 250, 300, 400, 500, 600]
     vmax = 1
     for frame in frames:
         plot_frame(

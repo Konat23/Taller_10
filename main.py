@@ -17,7 +17,7 @@ from numba import jit
 from utils import timing
 
 # Parameters
-Tout = 400
+Tout = 1000
 Nx = 200
 Nz = 200
 c = 1200.0
@@ -90,7 +90,7 @@ plot_traces(
 )
 print(np.max(video))
 # animate_video(video, Tout, n_save=250, vmax=1.0)
-frame = 250
+frame = 450
 title = f"frame = {frame}"
 video = video.transpose(2, 1, 0)
 plot_frame(video, n_save=frame, title=title, vmax=0.1)
