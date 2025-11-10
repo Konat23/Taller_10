@@ -4,8 +4,8 @@ from utils import get_CPML
 from utils import plot_frame, timing
 
 
-@jit(nopython=True)
-def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec):
+# @jit(nopython=True)
+def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec, cpml_size=20):
     max_ix = int(max_offset / dx)
     Nx, Nz = m.shape
     Nt = len(src)
@@ -25,7 +25,7 @@ def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec):
 
     v2 = m**2
 
-    l_att = 20
+    l_att = cpml_size
     CPMLimit = l_att
     one_over_dx2 = 1.0 / dx**2
     one_over_dz2 = 1.0 / dz**2
@@ -158,10 +158,11 @@ def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec):
 
         if (it % 100) == 0:
             print(f"Iteration {it}/{Nt - 1}")
-
+    print(f"P.shape: {P.shape}")
     # Extract result
-    start_ix = max(20, Ix0 - max_ix)  # 21 becomes 20 (0-based)
-    end_ix = min(Nx - 21, Ix0 + max_ix)  # Nx-20 becomes Nx-21
+    if np.size(Ix0):
+        start_ix = max(CPMLimit, Ix0 - max_ix)  # 21 becomes 20 (0-based)
+        end_ix = min(Nx - (CPMLimit + 1), Ix0 + max_ix)  # Nx-20 becomes Nx-21
 
     Pt = P[start_ix : end_ix + 1, Iz0, :].T
 

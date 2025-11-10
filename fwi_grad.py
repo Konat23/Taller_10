@@ -2,7 +2,9 @@ import numpy as np
 from propagator_v1 import propagator
 
 
-def FWI_GRAD(x, Nx, Nz, Nt, g1, Sx1, Sz, dx, dz, dt, offset_max, frec, Pt_obs, k):
+def FWI_GRAD(
+    x, Nx, Nz, Nt, g1, Sx1, Sz, dx, dz, dt, offset_max, frec, Pt_obs, k, cpml_size=20
+):
     Pt_mod, P_mod, d2P_dt2 = propagator(
         x.reshape(Nx, Nz), g1, Sx1, Sz, dx, dz, dt, offset_max, frec
     )
@@ -23,13 +25,14 @@ def FWI_GRAD(x, Nx, Nz, Nt, g1, Sx1, Sz, dx, dz, dt, offset_max, frec, Pt_obs, k
     Pt_back, P_back = propagator(
         x.reshape(Nx, Nz),
         np.flipud(res),
-        np.arange(21, Nx - 60),
+        np.arange(cpml_size, Nx - cpml_size),
         Sz,
         dx,
         dz,
         dt,
         offset_max,
         frec,
+        cpml_size=20,
     )
 
     P_back_t = np.zeros((Nx, Nz, Nt))
