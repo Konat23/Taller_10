@@ -4,7 +4,7 @@ from utils import get_CPML
 from utils import plot_frame, timing
 
 
-# @jit(nopython=True)
+@jit(nopython=True)
 def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec, cpml_size=20):
     max_ix = int(max_offset / dx)
     Nx, Nz = m.shape
@@ -158,14 +158,13 @@ def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec, cpml_size=20):
 
         if (it % 100) == 0:
             print(f"Iteration {it}/{Nt - 1}")
-    print(f"P.shape: {P.shape}")
     # Extract result
-    if np.size(Ix0) == 1:
-        start_ix = max(CPMLimit, Ix0 - max_ix)  # 21 becomes 20 (0-based)
-        end_ix = min(Nx - (CPMLimit + 1), Ix0 + max_ix)  # Nx-20 becomes Nx-21
-    else:
-        start_ix = CPMLimit
-        end_ix = Nx - (CPMLimit + 1)
+    ix_min = Ix0.min()
+    ix_max = Ix0.max()
+    start_ix = max(CPMLimit, ix_min - max_ix)
+    end_ix = min(Nx - (CPMLimit + 1), ix_max + max_ix)
+    # Note: Cuando se usa para retropropagar Ix0 es un array sin embarg Pt no se usa como tal
+    # Sin embargo cuando es propagador si es importante la resta del max_ix
     Pt = P[start_ix : end_ix + 1, Iz0, :].T
 
     return Pt, P, d2P_dt2

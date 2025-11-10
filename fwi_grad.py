@@ -5,9 +5,12 @@ from propagator_v1 import propagator
 def FWI_GRAD(
     x, Nx, Nz, Nt, g1, Sx1, Sz, dx, dz, dt, offset_max, frec, Pt_obs, k, cpml_size=20
 ):
+    print("Propagating forward wave...")
+    Sx1 = np.asarray(Sx1, dtype=np.int64).reshape(-1)
     Pt_mod, P_mod, d2P_dt2 = propagator(
         x.reshape(Nx, Nz), g1, Sx1, Sz, dx, dz, dt, offset_max, frec
     )
+    print(f"P_mod shape: {P_mod.shape}")
 
     if k < 3:
         ad = 5
@@ -22,6 +25,7 @@ def FWI_GRAD(
     f = 0.5 * np.dot(diff.T, diff)
 
     res = Pt_mod - Pt_obs
+    print("Propagating backwave...")
     Pt_back, P_back, d2P_dt2_Back = propagator(
         x.reshape(Nx, Nz),
         np.flipud(res),
