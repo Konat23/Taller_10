@@ -160,10 +160,12 @@ def propagator(m, src, Ix0, Iz0, dx, dz, dt, max_offset, frec, cpml_size=20):
             print(f"Iteration {it}/{Nt - 1}")
     print(f"P.shape: {P.shape}")
     # Extract result
-    if np.size(Ix0):
+    if np.size(Ix0) == 1:
         start_ix = max(CPMLimit, Ix0 - max_ix)  # 21 becomes 20 (0-based)
         end_ix = min(Nx - (CPMLimit + 1), Ix0 + max_ix)  # Nx-20 becomes Nx-21
-
+    else:
+        start_ix = CPMLimit
+        end_ix = Nx - (CPMLimit + 1)
     Pt = P[start_ix : end_ix + 1, Iz0, :].T
 
     return Pt, P, d2P_dt2

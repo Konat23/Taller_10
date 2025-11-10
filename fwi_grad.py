@@ -22,7 +22,7 @@ def FWI_GRAD(
     f = 0.5 * np.dot(diff.T, diff)
 
     res = Pt_mod - Pt_obs
-    Pt_back, P_back = propagator(
+    Pt_back, P_back, d2P_dt2_Back = propagator(
         x.reshape(Nx, Nz),
         np.flipud(res),
         np.arange(cpml_size, Nx - cpml_size),
@@ -34,6 +34,7 @@ def FWI_GRAD(
         frec,
         cpml_size=20,
     )
+    print(f"P_back shape: {P_back.shape}")
 
     P_back_t = np.zeros((Nx, Nz, Nt))
     for it in range(Nt):
